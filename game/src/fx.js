@@ -41,6 +41,33 @@ export function createFx(scene) {
   // One reusable explosion light + fireball sprite.
   const boomLight = new THREE.PointLight(0xff7a1a, 0, 24, 1.8);
   scene.add(boomLight);
+
+  // ---- floating dust motes (golden-hour atmosphere) ----
+  // One pooled Points cloud drifting slowly through the yard. Positions
+  // and velocities are preallocated Float32Arrays; step() moves them and
+  // wraps them inside the yard box. No allocation per frame.
+  const MOTES = 260;
+  const motePos = new Float32Array(MOTES * 3);
+  const moteVel = new Float32Array(MOTES * 3);
+  for (let i = 0; i < MOTES; i += 1) {
+    motePos[i * 3] = -24 + Math.random() * 48;
+    motePos[i * 3 + 1] = 0.2 + Math.random() * 6.5;
+    motePos[i * 3 + 2] = -18 + Math.random() * 36;
+    moteVel[i * 3] = (Math.random() - 0.5) * 0.12;
+    moteVel[i * 3 + 1] = (Math.random() - 0.5) * 0.05;
+    moteVel[i * 3 + 2] = (Math.random() - 0.5) * 0.12;
+  }
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+  const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({
+    // Soft round dot (the same texture as the impact bursts): bare
+    // PointsMaterial renders square pixels, which read as artifacts.
+    map: tex, color: 0xffd9a0, size: 0.09, sizeAttenuation: true,
+    transparent: true, opacity: 0.5, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }));
+  motes.frustumCulled = false;
+  scene.add(motes);
   const boomMat = new THREE.SpriteMaterial({
     map: tex, color: 0xffb060, transparent: true, opacity: 0,
     depthWrite: false, blending: THREE.AdditiveBlending,
@@ -108,6 +135,19 @@ export function createFx(scene) {
   }
 
   function step(dt) {
+    // Drift the dust motes; wrap them back inside the yard box.
+    for (let i = 0; i < MOTES; i += 1) {
+      let x = motePos[i * 3] + moteVel[i * 3] * dt;
+      let y = motePos[i * 3 + 1] + moteVel[i * 3 + 1] * dt;
+      let z = motePos[i * 3 + 2] + moteVel[i * 3 + 2] * dt;
+      if (x < -24) x += 48; else if (x > 24) x -= 48;
+      if (y < 0.2) y += 6.5; else if (y > 6.7) y -= 6.5;
+      if (z < -18) z += 36; else if (z > 18) z -= 36;
+      motePos[i * 3] = x;
+      motePos[i * 3 + 1] = y;
+      motePos[i * 3 + 2] = z;
+    }
+    moteGeo.attributes.position.needsUpdate = true;
     for (const it of items) {
       if (it.life <= 0) continue;
       it.life -= dt;

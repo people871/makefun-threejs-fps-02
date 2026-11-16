@@ -39,8 +39,11 @@ export const WEAPONS = {
 const METAL = new THREE.MeshStandardMaterial({ color: 0x4a5058, roughness: 0.5, metalness: 0.3 });
 const METAL_DARK = new THREE.MeshStandardMaterial({ color: 0x2e3238, roughness: 0.65, metalness: 0.3 });
 const GRIP = new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.8, metalness: 0.1 });
+// Near-white-hot starburst so the flash still pops against a warm
+// golden-hour sky and sunlit walls (additive: it glows, never greys).
 const FLASH_MAT = new THREE.MeshBasicMaterial({
-  color: 0xffd27a, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false,
+  color: 0xffe9b0, transparent: true, opacity: 0.95, side: THREE.DoubleSide,
+  depthWrite: false, blending: THREE.AdditiveBlending,
 });
 
 function box(w, h, d, x, y, z, mat) {

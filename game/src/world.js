@@ -69,19 +69,23 @@ function blobTexture(size, stops, w = size, h = size) {
   return tex;
 }
 
-// Vertical sky gradient: warm horizon haze up to soft afternoon blue.
+// Vertical sky gradient: golden hour — deep blue-violet zenith fading
+// through mauve to a warm orange/peach horizon band. NOTE: on the dome
+// the horizon sits at v≈0.5, so the warm band must live just above it —
+// stops below 0.5 are never visible above the walls.
 function skyTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 16;
   canvas.height = 512;
   const ctx = canvas.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0.0, '#4f83b8'); // zenith
-  grad.addColorStop(0.42, '#7ba7cc'); // mid sky
-  grad.addColorStop(0.62, '#c3d3de'); // high haze
-  grad.addColorStop(0.74, '#f2c98f'); // warm horizon
-  grad.addColorStop(0.82, '#e8b07a'); // low warm band
-  grad.addColorStop(1.0, '#8a7a63'); // below the horizon (never seen)
+  grad.addColorStop(0.0, '#3d4f96'); // zenith: deep blue-violet
+  grad.addColorStop(0.18, '#5a5fa8'); // blue-violet
+  grad.addColorStop(0.30, '#8a6fa0'); // violet-mauve
+  grad.addColorStop(0.40, '#d98a70'); // warm rose-peach
+  grad.addColorStop(0.47, '#f7b45e'); // warm orange horizon band
+  grad.addColorStop(0.53, '#eda04e'); // low warm band (just below horizon)
+  grad.addColorStop(1.0, '#7a5a48'); // below the horizon (never seen)
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 16, 512);
   const tex = new THREE.CanvasTexture(canvas);
@@ -90,6 +94,8 @@ function skyTexture() {
 }
 
 // A few soft overlapping puffs on one canvas: a cheap cloud sprite.
+// Golden hour: the tops stay near-white while the undersides are lit
+// warm orange by the low sun (a warm wash over the lower half).
 function cloudTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -109,6 +115,15 @@ function cloudTexture() {
   puff(178, 80, 48, 0.85);
   puff(108, 88, 40, 0.7);
   puff(156, 92, 38, 0.7);
+  // Warm underlight: sunset orange washing the cloud bellies.
+  ctx.globalCompositeOperation = 'source-atop';
+  const warm = ctx.createLinearGradient(0, 40, 0, 128);
+  warm.addColorStop(0, 'rgba(255,190,120,0)');
+  warm.addColorStop(0.55, 'rgba(255,170,100,0.35)');
+  warm.addColorStop(1, 'rgba(255,140,70,0.6)');
+  ctx.fillStyle = warm;
+  ctx.fillRect(0, 0, 256, 128);
+  ctx.globalCompositeOperation = 'source-over';
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
@@ -126,6 +141,22 @@ function corrugatedDraw(base, dark, light) {
       ctx.fillRect(x + ridge * 0.55, 0, ridge * 0.18, size);
     }
     speckle(ctx, size, 500, 0.12, false);
+    // rust streaks bleeding down from the top edge + grime near the base
+    for (let i = 0; i < 14; i++) {
+      const sx = Math.random() * size;
+      const sw = 2 + Math.random() * 6;
+      const len = size * (0.25 + Math.random() * 0.6);
+      const grad = ctx.createLinearGradient(0, 0, 0, len);
+      grad.addColorStop(0, `rgba(88,48,18,${0.28 + Math.random() * 0.2})`);
+      grad.addColorStop(1, 'rgba(88,48,18,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(sx, 0, sw, len);
+    }
+    const grime = ctx.createLinearGradient(0, size * 0.8, 0, size);
+    grime.addColorStop(0, 'rgba(40,28,16,0)');
+    grime.addColorStop(1, 'rgba(40,28,16,0.3)');
+    ctx.fillStyle = grime;
+    ctx.fillRect(0, size * 0.8, size, size * 0.2);
     // horizontal seam + rivets
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.fillRect(0, size / 2 - 1, size, 2);
@@ -138,9 +169,10 @@ function corrugatedDraw(base, dark, light) {
   };
 }
 
-function planksDraw(ctx, size) {
-  ctx.fillStyle = '#8a6f4e';
-  ctx.fillRect(0, 0, size, size);
+function planksDraw(base = '#8a6f4e') {
+  return (ctx, size) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
   const plank = size / 4;
   for (let y = 0; y < size; y += plank) {
     ctx.fillStyle = `rgba(0,0,0,${0.08 + (y / plank % 2) * 0.08})`;
@@ -159,6 +191,7 @@ function planksDraw(ctx, size) {
       ctx.stroke();
     }
   }
+  };
 }
 
 function concreteDraw(ctx, size) {  ctx.fillStyle = '#6a7076';
@@ -176,13 +209,13 @@ function concreteDraw(ctx, size) {  ctx.fillStyle = '#6a7076';
 }
 
 // ---------------------------------------------------------------- grass
-// Patchy lawn: at least three green tones (mid base, dark shade, light
-// yellow-green) in large soft blotches, plus dirt speckles, worn tan
-// streaks and fine blade strokes so it never reads as one flat green.
+// Patchy lawn, warmed for golden hour: olive-yellow greens, less
+// saturated than midday, so the grass sits in the same warm grade as
+// the sky and the low sun. Same blotch/blade/dirt structure as before.
 function grassDraw(ctx, size) {
-  ctx.fillStyle = '#5c7a34';
+  ctx.fillStyle = '#66783a';
   ctx.fillRect(0, 0, size, size);
-  const tones = ['#47682a', '#6d8a3c', '#7d9a45', '#55702e', '#86a04b'];
+  const tones = ['#55682e', '#77863c', '#8a8f45', '#6a7a30', '#94944d'];
   for (let i = 0; i < 11; i++) {
     const px = Math.random() * size;
     const py = Math.random() * size;
@@ -198,8 +231,8 @@ function grassDraw(ctx, size) {
     const x = Math.random() * size;
     const y = Math.random() * size;
     ctx.strokeStyle = Math.random() < 0.5
-      ? `rgba(20,40,10,${0.12 + Math.random() * 0.2})`
-      : `rgba(150,180,90,${0.10 + Math.random() * 0.18})`;
+      ? `rgba(30,45,12,${0.12 + Math.random() * 0.2})`
+      : `rgba(180,190,110,${0.10 + Math.random() * 0.18})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -245,7 +278,7 @@ function tuftTexture() {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, size, size);
-  const greens = ['#3f5f24', '#557a30', '#6d9240', '#8aa84e'];
+  const greens = ['#4a6428', '#5f7a30', '#7a8a3c', '#9a9a4e'];
   for (let i = 0; i < 15; i++) {
     const bx = 8 + i * 7 + (Math.random() - 0.5) * 5;
     const tipX = bx + (Math.random() - 0.5) * 44;
@@ -280,7 +313,7 @@ function mulberry32(seed) {
 function hazardDraw(ctx, size) {
   ctx.fillStyle = '#141414';
   ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = PALETTE.accent;
+  ctx.fillStyle = '#ffb52e'; // brighter amber so the pad reads in warm light
   const stripe = size / 8;
   for (let i = -1; i < 10; i++) {
     ctx.save();
@@ -323,8 +356,14 @@ function buildMaterials() {
       roughness: 0.7, metalness: 0.4,
     }),
     crate: new THREE.MeshStandardMaterial({
-      map: makeCanvasTexture(planksDraw, 256, 1, 1),
+      map: makeCanvasTexture(planksDraw(), 256, 1, 1),
       roughness: 0.85, metalness: 0.0,
+    }),
+    // Weathered grey-brown crates: same planks, older timber, so the yard
+    // is not one uniform wood tone.
+    crate2: new THREE.MeshStandardMaterial({
+      map: makeCanvasTexture(planksDraw('#7d7462'), 256, 1, 1),
+      roughness: 0.9, metalness: 0.0,
     }),
     concrete: new THREE.MeshStandardMaterial({
       map: makeCanvasTexture(concreteDraw, 256, 2, 1),
@@ -332,9 +371,9 @@ function buildMaterials() {
     }),
     hazard: new THREE.MeshStandardMaterial({
       map: makeCanvasTexture(hazardDraw, 256, 1, 1),
-      emissive: new THREE.Color(PALETTE.accent),
+      emissive: new THREE.Color(0xffb52e),
       emissiveMap: makeCanvasTexture(hazardDraw, 256, 1, 1),
-      emissiveIntensity: 0.3,
+      emissiveIntensity: 0.6,
       roughness: 0.6, metalness: 0.1,
     }),
   };
@@ -385,15 +424,15 @@ const BOXES = [
   [6, 2.6, 2.4, 8, 1.3, -4, 'containerTeal'],
   [2.4, 2.6, 6, -18, 1.3, 6, 'containerOlive'],
   [2.4, 2.6, 6, 18, 1.3, 6, 'containerGrey'],
-  // crates (1.2 cube, crouch cover)
-  [1.2, 1.2, 1.2, -3, 0.6, 2, 'crate'],
+  // crates (1.2 cube, crouch cover) — two timber tones alternate
+  [1.2, 1.2, 1.2, -3, 0.6, 2, 'crate2'],
   [1.2, 1.2, 1.2, 3, 0.6, -6, 'crate'],
   [1.2, 1.2, 1.2, -12, 0.6, 0, 'crate'],
-  [1.2, 1.2, 1.2, 12, 0.6, 0, 'crate'],
-  [1.2, 1.2, 1.2, -19, 0.6, -7, 'crate'],
+  [1.2, 1.2, 1.2, 12, 0.6, 0, 'crate2'],
+  [1.2, 1.2, 1.2, -19, 0.6, -7, 'crate2'],
   [1.2, 1.2, 1.2, 19, 0.6, -7, 'crate'],
   [1.2, 1.2, 1.2, -6, 0.6, 8, 'crate'],
-  [1.2, 1.2, 1.2, 6, 0.6, 8, 'crate'],
+  [1.2, 1.2, 1.2, 6, 0.6, 8, 'crate2'],
   // tall crates near the sites
   [1.2, 2.4, 1.2, -16, 1.2, -12, 'crate'],
   [1.2, 2.4, 1.2, 16, 1.2, -12, 'crate'],
@@ -579,40 +618,72 @@ function buildGrass(group, shootables) {
 // ------------------------------------------------------------------- build
 export function createWorld(scene) {
   // Warm hazy sky as the backdrop (the dome sits beyond the fog range and
-  // is fog:false, so the sky itself never gets fogged out).
-  scene.background = new THREE.Color(0x9db8cc);
-  scene.fog = new THREE.Fog(0xb9c8d8, 45, 110);
+  // is fog:false, so the sky itself never gets fogged out). The dome,
+  // sun and clouds are toneMapped:false so the golden-hour gradient and
+  // glow keep their designed colours under the ACES grade.
+  scene.background = new THREE.Color(0xe8b48c);
+  scene.fog = new THREE.Fog(0xdfb18c, 45, 110);
 
-  // Gradient sky dome, late-afternoon sun, and a few soft clouds.
+  // Gradient sky dome, low sun in the west, and dramatic clouds.
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(110, 24, 16),
-    new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false }),
+    new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false, toneMapped: false }),
   );
   scene.add(sky);
   const sunTex = blobTexture(128, [
-    [0, 'rgba(255,244,214,1)'],
-    [0.25, 'rgba(255,214,140,0.95)'],
-    [0.6, 'rgba(255,180,90,0.28)'],
-    [1, 'rgba(255,180,90,0)'],
+    [0, 'rgba(255,246,220,1)'],
+    [0.22, 'rgba(255,214,140,0.95)'],
+    [0.5, 'rgba(255,170,80,0.4)'],
+    [1, 'rgba(255,160,70,0)'],
   ]);
   const sun = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: sunTex, transparent: true, depthWrite: false, fog: false,
+    map: sunTex, transparent: true, depthWrite: false, fog: false, toneMapped: false,
   }));
-  sun.position.set(30, 34, -45);
-  sun.scale.set(22, 22, 1);
+  sun.position.set(-52, 20, -48);
+  sun.scale.set(30, 30, 1);
   scene.add(sun);
   const cloudTex = cloudTexture();
+  // Bigger, more numerous clouds with warm-lit undersides; the north-west
+  // sky is where the start, play and end cameras all look, so it gets
+  // the heaviest cover, with a few to the east and south for balance.
   const cloudSpots = [
-    [-60, 52, -70, 44, 22], [30, 58, -80, 52, 26], [70, 48, 40, 40, 20],
-    [-20, 62, 75, 46, 24], [-85, 55, 20, 36, 18], [10, 50, -40, 30, 15],
+    [-60, 52, -70, 56, 28], [30, 58, -80, 64, 32], [70, 48, 40, 50, 25],
+    [-20, 62, 75, 58, 30], [-85, 55, 20, 46, 23], [10, 50, -40, 38, 19],
+    [-35, 68, -55, 48, 24], [-75, 60, -35, 52, 26], [45, 66, -60, 44, 22],
+    [85, 58, -30, 42, 21], [-10, 72, 30, 50, 25], [60, 54, 70, 46, 23],
   ];
   for (const [x, y, z, w, h] of cloudSpots) {
     const cloud = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: cloudTex, transparent: true, opacity: 0.75, depthWrite: false, fog: false,
+      map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false,
+      fog: false, toneMapped: false, color: 0xffe2c0,
     }));
     cloud.position.set(x, y, z);
     cloud.scale.set(w, h, 1);
     scene.add(cloud);
+  }
+
+  // Light shafts: large soft additive planes slanting down from the low
+  // western sun. Subtle by design (opacity 0.07) — warm air, not fog.
+  const shaftTex = blobTexture(128, [
+    [0, 'rgba(255,205,135,0.9)'],
+    [0.45, 'rgba(255,185,105,0.3)'],
+    [1, 'rgba(255,180,100,0)'],
+  ]);
+  const shaftSpots = [
+    [-10, 20, -8, 0.55, 0.32], [6, 22, 4, 0.45, 0.30], [-20, 18, 10, 0.65, 0.34],
+  ];
+  for (const [x, y, z, ry, rz] of shaftSpots) {
+    const shaft = new THREE.Mesh(
+      new THREE.PlaneGeometry(15, 46),
+      new THREE.MeshBasicMaterial({
+        map: shaftTex, transparent: true, opacity: 0.07, depthWrite: false,
+        blending: THREE.AdditiveBlending, fog: false, toneMapped: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    shaft.position.set(x, y, z);
+    shaft.rotation.set(0, ry, rz);
+    scene.add(shaft);
   }
 
   const materials = buildMaterials();
@@ -653,13 +724,14 @@ export function createWorld(scene) {
   const grassTufts = buildGrass(group, shootables);
 
   // ------------------------------------------------------------ lighting
-  // Late-afternoon sun: bright warm key with shadows, cool sky bounce.
-  // Hemisphere ground bounce is grass-green now that the yard is a lawn.
-  const hemi = new THREE.HemisphereLight(0xbfd6e8, 0x6a7a4f, 1.35);
+  // Golden-hour sun: low in the west, warm orange, long shadows east.
+  // Warm hemisphere (peach sky / warm earth bounce) + a cool fill from
+  // the east so shadow sides stay readable instead of muddy.
+  const hemi = new THREE.HemisphereLight(0xffcf9e, 0x8a6a45, 1.3);
   scene.add(hemi);
 
-  const key = new THREE.DirectionalLight(0xffd9a0, 2.6);
-  key.position.set(14, 16, -10);
+  const key = new THREE.DirectionalLight(0xffb066, 2.8);
+  key.position.set(-26, 9, -10);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.left = -30;
@@ -672,8 +744,8 @@ export function createWorld(scene) {
   scene.add(key);
   scene.add(key.target);
 
-  const fill = new THREE.DirectionalLight(0x9db8d6, 0.55);
-  fill.position.set(-10, 12, -8);
+  const fill = new THREE.DirectionalLight(0x8fa8c8, 0.55);
+  fill.position.set(18, 14, 6);
   scene.add(fill);
   scene.add(fill.target);
 

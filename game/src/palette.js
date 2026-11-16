@@ -1,9 +1,9 @@
-// palette.js — look plan: "late-afternoon depot: sunlit steel, warm haze"
-// A sunlit industrial yard in warm late-afternoon light: pale sky blue for
+// palette.js — look plan: "golden-hour depot: low warm sun, violet dusk sky"
+// A sunlit industrial yard in low late-afternoon light: warm peach for
 // fog/background, mid steel for surfaces, warm amber reserved for hazard
 // markings and site pads, ink-white UI text.
 export const PALETTE = {
-  canvas: '#9db8cc',
+  canvas: '#e8b48c',
   surface: '#2a3540',
   hairline: '#39434d',
   ink: '#e8e4d8',
