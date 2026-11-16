@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { WEAPONS, createArsenal, createGrenades } from './weapons.js';
 import { createPlayer } from './player.js';
 import { createBots } from './bots.js';
+import { createFx } from './fx.js';
 import { rayHitWalls, rayHitBoxes, segmentBlocked } from './raycast.js';
 
 const ROUND_TIME = 100;
@@ -62,22 +63,24 @@ export function createGame(deps) {
   const player = createPlayer(world.colliders);
   const arsenal = createArsenal(camera, audio);
   const grenades = createGrenades(scene, audio);
+  const fx = createFx(scene);
   const events = [];
 
   // ---- tracers (fixed pool, no allocation) ----
+  // Bright thin boxes, not 1 px lines: they read in a still screenshot.
   const tracerPool = [];
   for (let i = 0; i < 12; i += 1) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-    const mat = new THREE.LineBasicMaterial({ color: 0xf0a830, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const line = new THREE.Line(geo, mat);
-    line.frustumCulled = false;
-    line.visible = false;
-    scene.add(line);
-    tracerPool.push({ line, life: 0 });
+    const geo = new THREE.BoxGeometry(0.05, 0.05, 1);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffc860, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    scene.add(mesh);
+    tracerPool.push({ mesh, life: 0 });
   }
   let tracerIndex = 0;
   const tmpOrigin = new THREE.Vector3();
+  const tmpMuzzle = new THREE.Vector3();
   const tmpDir = new THREE.Vector3();
   const tmpPoint = new THREE.Vector3();
   const tmpEye = new THREE.Vector3();
@@ -87,21 +90,21 @@ export function createGame(deps) {
   function spawnTracer(from, to) {
     const t = tracerPool[tracerIndex];
     tracerIndex = (tracerIndex + 1) % tracerPool.length;
-    const attr = t.line.geometry.getAttribute('position');
-    attr.setXYZ(0, from.x, from.y, from.z);
-    attr.setXYZ(1, to.x, to.y, to.z);
-    attr.needsUpdate = true;
-    t.line.visible = true;
-    t.line.material.opacity = 0.85;
-    t.life = 0.08;
+    const len = from.distanceTo(to);
+    t.mesh.position.copy(from).add(to).multiplyScalar(0.5);
+    t.mesh.lookAt(to);
+    t.mesh.scale.set(1, 1, Math.max(0.05, len));
+    t.mesh.visible = true;
+    t.mesh.material.opacity = 0.95;
+    t.life = 0.25;
   }
 
   function stepTracers(dt) {
     for (const t of tracerPool) {
       if (t.life <= 0) continue;
       t.life -= dt;
-      t.line.material.opacity = Math.max(0, (t.life / 0.08) * 0.85);
-      if (t.life <= 0) t.line.visible = false;
+      t.mesh.material.opacity = Math.max(0, (t.life / 0.25) * 0.95);
+      if (t.life <= 0) t.mesh.visible = false;
     }
   }
 
@@ -200,6 +203,11 @@ export function createGame(deps) {
     fireHitscan(origin, dir, shooter) {
       const result = resolveHitscan(origin, dir, shooter);
       spawnTracer(origin, result.point);
+      if (result.target) {
+        fx.burst(result.point, { count: 8, color: 0xffb060, speed: 3, life: 0.4, size: 0.28, additive: true });
+      } else {
+        fx.burst(result.point, { count: 6, color: 0xcfc4ae, speed: 2, life: 0.55, size: 0.4 });
+      }
       if (result.target === 'player') {
         damagePlayer(result.damage, result.part, shooter);
       } else if (result.target) {
@@ -317,7 +325,10 @@ export function createGame(deps) {
     if (state.round === 1) state.armor = 0;
     grenadeCount = 0;
     arsenal.resetRound(state.round > 1);
-    player.teleport(0, 15, 0);
+    // Spawn a step behind the Kestrel line: the third K bot spawns at
+    // (0,15), and standing on top of it filled the start shot with a flat
+    // teal plane (the bot's torso at the camera).
+    player.teleport(0, 16.5, 0);
     const site = rng() < 0.5 ? 'A' : 'B';
     bots.spawnRound({ K: ['rifle', 'rifle', 'smg', 'sniper'], V: ['rifle', 'rifle', 'rifle', 'smg', 'sniper'], site });
     hud.hideBanner();
@@ -398,7 +409,15 @@ export function createGame(deps) {
     tmpDir.normalize();
     camera.getWorldPosition(tmpOrigin);
     const result = resolveHitscan(tmpOrigin, tmpDir, 'player');
-    spawnTracer(tmpOrigin, result.point);
+    // Tracer starts at the muzzle, not the eye: offset from the view axis,
+    // so the streak reads as a diagonal in the frame instead of a dot.
+    arsenal.muzzleWorld(tmpMuzzle);
+    spawnTracer(tmpMuzzle, result.point);
+    if (result.target) {
+      fx.burst(result.point, { count: 8, color: 0xffb060, speed: 3, life: 0.4, size: 0.28, additive: true });
+    } else {
+      fx.burst(result.point, { count: 6, color: 0xcfc4ae, speed: 2, life: 0.55, size: 0.4 });
+    }
     if (result.target && result.target !== 'player') {
       const killed = damageBot(result.target, result.damage, result.part, 'player');
       hud.hitMarker(killed, 4000);
@@ -447,6 +466,7 @@ export function createGame(deps) {
         bomb.z = player.state.position.z;
         hud.hidePlant();
         hud.banner('CHARGE PLANTED', `Defend Site ${site} — ${BOMB_TIMER}s to detonation.`, 'win');
+        fx.explosion({ x: player.state.position.x, y: 1, z: player.state.position.z }, 0.4);
         audio.plantBeep(true);
       }
     } else {
@@ -461,6 +481,7 @@ export function createGame(deps) {
   // ---- grenades ----
   function stepGrenades(dt) {
     grenades.step(dt, world.colliders, (pos) => {
+      fx.explosion(pos, 1);
       // Damage everyone near the blast; walls blunt it.
       const radius = WEAPONS.grenade.radius;
       const hurt = (targetPos, apply) => {
@@ -495,6 +516,7 @@ export function createGame(deps) {
         bomb.x = evt.x ?? bomb.x;
         bomb.z = evt.z ?? bomb.z;
         hud.banner('CHARGE PLANTED', `Defend Site ${evt.site} — ${BOMB_TIMER}s to detonation.`, 'win');
+        fx.explosion({ x: bomb.x, y: 1, z: bomb.z }, 0.4);
         audio.plantBeep(true);
       } else if (evt.type === 'defuseDone') {
         endRound('V', 'Charge defused.');
@@ -531,6 +553,7 @@ export function createGame(deps) {
       state.roundTime = state.bombTimer;
       if (Math.floor(state.bombTimer) !== Math.floor(state.bombTimer + dt)) audio.plantBeep(false);
       if (state.bombTimer <= 0) {
+        fx.explosion({ x: bomb.x, y: 1, z: bomb.z }, 1.6);
         audio.explosion();
         endRound('K', 'Charge detonated.');
       }
@@ -574,6 +597,7 @@ export function createGame(deps) {
     bots.step(dt, state.elapsed);
     stepGrenades(dt);
     stepTracers(dt);
+    fx.step(dt);
     drainEvents();
 
     // Bomb follows its holder.
@@ -595,13 +619,20 @@ export function createGame(deps) {
     }
 
     // Camera follows the player (or stays at the death spot).
-    camera.position.set(player.state.position.x, player.state.position.y + player.state.eye, player.state.position.z);
-    camera.rotation.set(player.state.pitch, player.state.yaw, 0, 'YXZ');
+    syncCamera();
     const fovTarget = 74 * arsenal.zoomFovMult();
     if (Math.abs(camera.fov - fovTarget) > 0.05) {
       camera.fov += (fovTarget - camera.fov) * Math.min(1, dt * 10);
       camera.updateProjectionMatrix();
     }
+  }
+
+  // Put the camera where the player is looking, now (also used by staging
+  // so a staged shot fires down the actual view direction).
+  function syncCamera() {
+    camera.position.set(player.state.position.x, player.state.position.y + player.state.eye, player.state.position.z);
+    camera.rotation.set(player.state.pitch, player.state.yaw, 0, 'YXZ');
+    camera.updateMatrixWorld(true);
   }
 
   function syncHud() {
@@ -634,48 +665,80 @@ export function createGame(deps) {
     hud.hideBuy();
     if (name === 'start') {
       startMatch();
-      player.teleport(0, 15, 0.35);
-      player.state.pitch = 0.02;
+      player.teleport(0, 16.5, 0.15);
+      player.state.pitch = 0.03;
+      // Teammates advance ahead of the player instead of standing on the
+      // spawn point (one used to sit exactly at the camera and fill the
+      // frame with a flat teal plane). Each staged bot holds a zero-length
+      // path at its own spot so the settle step leaves it standing tall.
+      const kBots = bots.bots.filter((b) => b.team === 'K');
+      const kSpots = [[-4, 12.5], [-1.5, 11.5], [1.5, 12], [4, 11.5]];
+      kBots.forEach((b, i) => {
+        const spot = kSpots[i % kSpots.length];
+        b.pos.set(spot[0], 0, spot[1]);
+        b.yaw = Math.PI;
+        b.holdYaw = Math.PI;
+        b.state = 'hold';
+        b.path = [{ x: spot[0], z: spot[1] }];
+        b.pathIndex = 0;
+        b.crouching = false;
+      });
       hud.showBuy(buyItems());
     } else if (name === 'play') {
       startMatch();
       state.phase = 'live';
       state.roundTime = 62;
       hud.hideBuy();
-      player.teleport(0, 6, 0.1);
-      player.state.pitch = 0;
+      // Mid-lane firefight, staged so the action reads in one glance: the
+      // player stands east of the mid wall with a clear lane to a Vulture
+      // 7 m ahead, a second Vulture to the left, a Kestrel teammate
+      // left-front. The camera aims dead-centre at the first Vulture's
+      // torso and one live round is fired: the frozen frame keeps the
+      // muzzle flash, the tracer and the hitmarker (the shot lands, the
+      // bot survives at 67 hp).
+      player.teleport(3.2, 4.5, 0);
       state.hp = 78;
       state.money = 2400;
       arsenal.buy('rifle');
       arsenal.equip('rifle');
-      // Stage two enemies in view down the mid lane (bot yaw 0 faces south,
-      // toward the player; yaw PI faces north).
+      const stageBot = (bot, x, z, yaw) => {
+        bot.pos.set(x, 0, z);
+        bot.yaw = yaw;
+        bot.holdYaw = yaw;
+        bot.state = 'hold';
+        bot.path = [{ x, z }];
+        bot.pathIndex = 0;
+        bot.crouching = false;
+      };
       const vBots = bots.bots.filter((b) => b.team === 'V');
-      if (vBots[0]) {
-        vBots[0].pos.set(1.5, 0, -4);
-        vBots[0].yaw = 0;
-        vBots[0].state = 'hold';
-        vBots[0].path = [];
-      }
-      if (vBots[1]) {
-        vBots[1].pos.set(-3.5, 0, -7);
-        vBots[1].yaw = 0;
-        vBots[1].state = 'hold';
-        vBots[1].path = [];
-      }
+      if (vBots[0]) stageBot(vBots[0], 2.2, -2.5, 0);
+      if (vBots[1]) stageBot(vBots[1], -2.5, -3.5, 0);
       const kBots = bots.bots.filter((b) => b.team === 'K');
-      if (kBots[0]) {
-        kBots[0].pos.set(-2.5, 0, 9);
-        kBots[0].yaw = Math.PI;
-        kBots[0].state = 'hold';
-        kBots[0].path = [];
+      if (kBots[0]) stageBot(kBots[0], 1.2, 1.0, Math.PI);
+      if (vBots[0]) {
+        const px = player.state.position.x;
+        const pz = player.state.position.z;
+        const tx = vBots[0].pos.x;
+        const tz = vBots[0].pos.z;
+        player.state.yaw = Math.atan2(px - tx, pz - tz);
+        player.state.pitch = Math.atan2(
+          1.2 - (player.state.position.y + player.state.eye),
+          Math.hypot(tx - px, tz - pz),
+        );
+        syncCamera();
+        scene.updateMatrixWorld(true);
+        playerShoot();
+        syncCamera();
       }
     } else if (name === 'end') {
       startMatch();
       state.phase = 'roundEnd';
       state.scoreK = 1;
       state.roundEndAt = state.elapsed;
-      player.teleport(-16, -9, 0.6);
+      // Stand at the south-east corner of Site A looking in across the pad:
+      // the old spot (-16,-9) put the camera against the tall crate and the
+      // site wall, so the frame was one flat wall.
+      player.teleport(-14.5, -4.5, 0.785);
       player.state.pitch = -0.05;
       // startMatch -> startRound re-opens the buy menu; a round-end frame
       // must not show it (the 'play' branch hides it for the same reason).

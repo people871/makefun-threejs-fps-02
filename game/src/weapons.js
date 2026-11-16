@@ -36,11 +36,11 @@ export const WEAPONS = {
   },
 };
 
-const METAL = new THREE.MeshStandardMaterial({ color: 0x1c1f24, roughness: 0.55, metalness: 0.8 });
-const METAL_DARK = new THREE.MeshStandardMaterial({ color: 0x0e1013, roughness: 0.7, metalness: 0.6 });
+const METAL = new THREE.MeshStandardMaterial({ color: 0x4a5058, roughness: 0.5, metalness: 0.3 });
+const METAL_DARK = new THREE.MeshStandardMaterial({ color: 0x2e3238, roughness: 0.65, metalness: 0.3 });
 const GRIP = new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.8, metalness: 0.1 });
 const FLASH_MAT = new THREE.MeshBasicMaterial({
-  color: 0xffd27a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false,
+  color: 0xffd27a, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false,
 });
 
 function box(w, h, d, x, y, z, mat) {
@@ -114,14 +114,21 @@ export function createArsenal(camera, audio) {
   for (const id of ['sidearm', 'rifle', 'smg', 'sniper']) {
     const g = buildViewModel(id);
     g.visible = id === current;
-    const flashMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.16), FLASH_MAT.clone());
+    // Starburst flash: two crossed planes at the muzzle, plus a point light
+    // that throws warm light onto the gun and the ground for a few frames.
+    const flashMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), FLASH_MAT.clone());
     flashMesh.position.set(0, 0.01, MUZZLE_Z[id]);
     flashMesh.visible = false;
     g.add(flashMesh);
-    const light = new THREE.PointLight(0xffc46b, 0, 3.5);
+    const flashMesh2 = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), FLASH_MAT.clone());
+    flashMesh2.position.set(0, 0.01, MUZZLE_Z[id]);
+    flashMesh2.rotation.z = Math.PI / 4;
+    flashMesh2.visible = false;
+    g.add(flashMesh2);
+    const light = new THREE.PointLight(0xffc46b, 0, 6);
     light.position.set(0, 0.02, MUZZLE_Z[id]);
     g.add(light);
-    flashMeshes[id] = flashMesh;
+    flashMeshes[id] = [flashMesh, flashMesh2];
     flashLights[id] = light;
     models[id] = g;
     root.add(g);
@@ -166,10 +173,10 @@ export function createArsenal(camera, audio) {
       const d = def();
       state[current].mag -= 1;
       cooldown = d.fireGap;
-      flash = 0.06;
+      flash = 0.1;
       kick = 1;
-      flashMeshes[current].visible = true;
-      flashLights[current].intensity = 6;
+      for (const m of flashMeshes[current]) m.visible = true;
+      flashLights[current].intensity = 16;
       if (audio) audio.shot(d.shotKind);
       return d;
     },
@@ -192,6 +199,11 @@ export function createArsenal(camera, audio) {
     },
 
     setZoomed(b) { zoomed = !!b; },
+    // World position of the current weapon's muzzle (for tracers).
+    muzzleWorld(out) {
+      flashLights[current].getWorldPosition(out);
+      return out;
+    },
     zoomFovMult() {
       if (current !== 'sniper') return 1;
       return 1 - 0.55 * zoomT;
@@ -232,7 +244,7 @@ export function createArsenal(camera, audio) {
       if (flash > 0) {
         flash -= dt;
         if (flash <= 0) {
-          flashMeshes[current].visible = false;
+          for (const m of flashMeshes[current]) m.visible = false;
           flashLights[current].intensity = 0;
         }
       }

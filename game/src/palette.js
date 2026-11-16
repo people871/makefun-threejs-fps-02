@@ -1,9 +1,10 @@
-// palette.js — look plan: "dusk depot: cold steel, amber hazard light"
-// A dim industrial yard at dusk: dark blue-grey steel and asphalt, warm
-// amber reserved for hazard markings and site pads, ink-white UI text.
+// palette.js — look plan: "late-afternoon depot: sunlit steel, warm haze"
+// A sunlit industrial yard in warm late-afternoon light: pale sky blue for
+// fog/background, mid steel for surfaces, warm amber reserved for hazard
+// markings and site pads, ink-white UI text.
 export const PALETTE = {
-  canvas: '#0f1418',
-  surface: '#1c232b',
+  canvas: '#9db8cc',
+  surface: '#2a3540',
   hairline: '#39434d',
   ink: '#e8e4d8',
   muted: '#8b98a3',

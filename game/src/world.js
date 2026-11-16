@@ -31,14 +31,86 @@ function speckle(ctx, size, count, alpha, light) {
 }
 
 function asphaltDraw(ctx, size) {
-  ctx.fillStyle = '#26292d';
+  ctx.fillStyle = '#4a4f55';
   ctx.fillRect(0, 0, size, size);
+  // Large soft patches of warmer / cooler tone so the yard is not one flat grey.
+  for (let i = 0; i < 7; i++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const pr = size * (0.25 + Math.random() * 0.35);
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, pr);
+    const warm = Math.random() < 0.5;
+    grad.addColorStop(0, warm ? 'rgba(122,102,74,0.16)' : 'rgba(70,88,104,0.16)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
   speckle(ctx, size, 2600, 0.16, false);
   speckle(ctx, size, 900, 0.10, true);
   // faint expansion joints
   ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 2;
   ctx.strokeRect(1, 1, size - 2, size - 2);
+}
+
+// Soft radial blob (sun disc, cloud puffs, impact dust) on a canvas.
+function blobTexture(size, stops, w = size, h = size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) / 2);
+  for (const [at, color] of stops) grad.addColorStop(at, color);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Vertical sky gradient: warm horizon haze up to soft afternoon blue.
+function skyTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0.0, '#4f83b8'); // zenith
+  grad.addColorStop(0.42, '#7ba7cc'); // mid sky
+  grad.addColorStop(0.62, '#c3d3de'); // high haze
+  grad.addColorStop(0.74, '#f2c98f'); // warm horizon
+  grad.addColorStop(0.82, '#e8b07a'); // low warm band
+  grad.addColorStop(1.0, '#8a7a63'); // below the horizon (never seen)
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 16, 512);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// A few soft overlapping puffs on one canvas: a cheap cloud sprite.
+function cloudTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const puff = (x, y, r, a) => {
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `rgba(255,252,246,${a})`);
+    grad.addColorStop(1, 'rgba(255,252,246,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  puff(80, 78, 52, 0.85);
+  puff(128, 62, 58, 0.9);
+  puff(178, 80, 48, 0.85);
+  puff(108, 88, 40, 0.7);
+  puff(156, 92, 38, 0.7);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 function corrugatedDraw(base, dark, light) {
@@ -66,7 +138,7 @@ function corrugatedDraw(base, dark, light) {
 }
 
 function planksDraw(ctx, size) {
-  ctx.fillStyle = '#7a6248';
+  ctx.fillStyle = '#8a6f4e';
   ctx.fillRect(0, 0, size, size);
   const plank = size / 4;
   for (let y = 0; y < size; y += plank) {
@@ -89,7 +161,7 @@ function planksDraw(ctx, size) {
 }
 
 function concreteDraw(ctx, size) {
-  ctx.fillStyle = '#555b60';
+  ctx.fillStyle = '#6a7076';
   ctx.fillRect(0, 0, size, size);
   speckle(ctx, size, 2000, 0.14, false);
   speckle(ctx, size, 700, 0.08, true);
@@ -128,11 +200,24 @@ function buildMaterials() {
       roughness: 0.95, metalness: 0.0,
     }),
     wall: new THREE.MeshStandardMaterial({
-      map: makeCanvasTexture(corrugatedDraw('#5d6871', '#49525a', '#7d8894'), 256, 3, 1),
+      map: makeCanvasTexture(corrugatedDraw('#6d7880', '#565f67', '#93a0ab'), 256, 3, 1),
       roughness: 0.6, metalness: 0.5,
     }),
-    container: new THREE.MeshStandardMaterial({
-      map: makeCanvasTexture(corrugatedDraw('#6b4a2f', '#523722', '#8a6242'), 256, 2, 1),
+    // Containers in distinct yard colours so the scene is not flat brown.
+    containerRust: new THREE.MeshStandardMaterial({
+      map: makeCanvasTexture(corrugatedDraw('#a85c28', '#83431c', '#c97a3e'), 256, 2, 1),
+      roughness: 0.7, metalness: 0.4,
+    }),
+    containerTeal: new THREE.MeshStandardMaterial({
+      map: makeCanvasTexture(corrugatedDraw('#2e6f6a', '#20524e', '#4a938c'), 256, 2, 1),
+      roughness: 0.7, metalness: 0.4,
+    }),
+    containerOlive: new THREE.MeshStandardMaterial({
+      map: makeCanvasTexture(corrugatedDraw('#6b6b3a', '#51512c', '#8a8a52'), 256, 2, 1),
+      roughness: 0.7, metalness: 0.4,
+    }),
+    containerGrey: new THREE.MeshStandardMaterial({
+      map: makeCanvasTexture(corrugatedDraw('#6a7076', '#52575c', '#8b9298'), 256, 2, 1),
       roughness: 0.7, metalness: 0.4,
     }),
     crate: new THREE.MeshStandardMaterial({
@@ -147,7 +232,7 @@ function buildMaterials() {
       map: makeCanvasTexture(hazardDraw, 256, 1, 1),
       emissive: new THREE.Color(PALETTE.accent),
       emissiveMap: makeCanvasTexture(hazardDraw, 256, 1, 1),
-      emissiveIntensity: 0.9,
+      emissiveIntensity: 0.3,
       roughness: 0.6, metalness: 0.1,
     }),
   };
@@ -193,11 +278,11 @@ const BOXES = [
   [4, 1.2, 1.2, 0, 0.6, 0, 'concrete'],
   [1.2, 4, 1.2, -5, 2, -2, 'concrete'],
   [1.2, 4, 1.2, 5, 2, 2, 'concrete'],
-  // containers (2.6 high, block sight)
-  [6, 2.6, 2.4, -8, 1.3, 4, 'container'],
-  [6, 2.6, 2.4, 8, 1.3, -4, 'container'],
-  [2.4, 2.6, 6, -18, 1.3, 6, 'container'],
-  [2.4, 2.6, 6, 18, 1.3, 6, 'container'],
+  // containers (2.6 high, block sight) — one colour each
+  [6, 2.6, 2.4, -8, 1.3, 4, 'containerRust'],
+  [6, 2.6, 2.4, 8, 1.3, -4, 'containerTeal'],
+  [2.4, 2.6, 6, -18, 1.3, 6, 'containerOlive'],
+  [2.4, 2.6, 6, 18, 1.3, 6, 'containerGrey'],
   // crates (1.2 cube, crouch cover)
   [1.2, 1.2, 1.2, -3, 0.6, 2, 'crate'],
   [1.2, 1.2, 1.2, 3, 0.6, -6, 'crate'],
@@ -220,8 +305,42 @@ const SITE_PADS = [
 
 // ------------------------------------------------------------------- build
 export function createWorld(scene) {
-  scene.background = new THREE.Color(PALETTE.canvas);
-  scene.fog = new THREE.Fog(PALETTE.canvas, 30, 70);
+  // Warm hazy sky as the backdrop (the dome sits beyond the fog range and
+  // is fog:false, so the sky itself never gets fogged out).
+  scene.background = new THREE.Color(0x9db8cc);
+  scene.fog = new THREE.Fog(0xb9c8d8, 45, 110);
+
+  // Gradient sky dome, late-afternoon sun, and a few soft clouds.
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(110, 24, 16),
+    new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false }),
+  );
+  scene.add(sky);
+  const sunTex = blobTexture(128, [
+    [0, 'rgba(255,244,214,1)'],
+    [0.25, 'rgba(255,214,140,0.95)'],
+    [0.6, 'rgba(255,180,90,0.28)'],
+    [1, 'rgba(255,180,90,0)'],
+  ]);
+  const sun = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: sunTex, transparent: true, depthWrite: false, fog: false,
+  }));
+  sun.position.set(30, 34, -45);
+  sun.scale.set(22, 22, 1);
+  scene.add(sun);
+  const cloudTex = cloudTexture();
+  const cloudSpots = [
+    [-60, 52, -70, 44, 22], [30, 58, -80, 52, 26], [70, 48, 40, 40, 20],
+    [-20, 62, 75, 46, 24], [-85, 55, 20, 36, 18], [10, 50, -40, 30, 15],
+  ];
+  for (const [x, y, z, w, h] of cloudSpots) {
+    const cloud = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: cloudTex, transparent: true, opacity: 0.75, depthWrite: false, fog: false,
+    }));
+    cloud.position.set(x, y, z);
+    cloud.scale.set(w, h, 1);
+    scene.add(cloud);
+  }
 
   const materials = buildMaterials();
   const group = new THREE.Group();
@@ -256,11 +375,12 @@ export function createWorld(scene) {
   }
 
   // ------------------------------------------------------------ lighting
-  const hemi = new THREE.HemisphereLight(PALETTE.surface, PALETTE.canvas, 0.9);
+  // Late-afternoon sun: bright warm key with shadows, cool sky bounce.
+  const hemi = new THREE.HemisphereLight(0xbfd6e8, 0x8a7a5f, 1.35);
   scene.add(hemi);
 
-  const key = new THREE.DirectionalLight(0xffe0b3, 1.6);
-  key.position.set(12, 18, 6);
+  const key = new THREE.DirectionalLight(0xffd9a0, 2.6);
+  key.position.set(14, 16, -10);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.left = -30;
@@ -273,7 +393,7 @@ export function createWorld(scene) {
   scene.add(key);
   scene.add(key.target);
 
-  const fill = new THREE.DirectionalLight(0x9db8d6, 0.4);
+  const fill = new THREE.DirectionalLight(0x9db8d6, 0.55);
   fill.position.set(-10, 12, -8);
   scene.add(fill);
   scene.add(fill.target);
