@@ -3,6 +3,7 @@
 // All solid geometry is axis-aligned boxes; collision uses THREE.Box3.
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
+import { NODES, EDGE_PAIRS } from './nav.js';
 
 // ---------------------------------------------------------------- textures
 // Draw into a canvas, return a repeating sRGB texture.
@@ -160,8 +161,7 @@ function planksDraw(ctx, size) {
   }
 }
 
-function concreteDraw(ctx, size) {
-  ctx.fillStyle = '#6a7076';
+function concreteDraw(ctx, size) {  ctx.fillStyle = '#6a7076';
   ctx.fillRect(0, 0, size, size);
   speckle(ctx, size, 2000, 0.14, false);
   speckle(ctx, size, 700, 0.08, true);
@@ -173,6 +173,108 @@ function concreteDraw(ctx, size) {
     ctx.lineTo(Math.random() * size, size);
     ctx.stroke();
   }
+}
+
+// ---------------------------------------------------------------- grass
+// Patchy lawn: at least three green tones (mid base, dark shade, light
+// yellow-green) in large soft blotches, plus dirt speckles, worn tan
+// streaks and fine blade strokes so it never reads as one flat green.
+function grassDraw(ctx, size) {
+  ctx.fillStyle = '#5c7a34';
+  ctx.fillRect(0, 0, size, size);
+  const tones = ['#47682a', '#6d8a3c', '#7d9a45', '#55702e', '#86a04b'];
+  for (let i = 0; i < 11; i++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const pr = size * (0.2 + Math.random() * 0.35);
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, pr);
+    grad.addColorStop(0, tones[i % tones.length] + '73'); // ~0.45 alpha
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
+  // fine blade grain: short vertical strokes in lighter/darker green
+  for (let i = 0; i < 900; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    ctx.strokeStyle = Math.random() < 0.5
+      ? `rgba(20,40,10,${0.12 + Math.random() * 0.2})`
+      : `rgba(150,180,90,${0.10 + Math.random() * 0.18})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * 2, y - 2 - Math.random() * 3);
+    ctx.stroke();
+  }
+  speckle(ctx, size, 2200, 0.16, false);
+  speckle(ctx, size, 800, 0.10, true);
+  // dirt speckles (bare earth showing through the lawn)
+  for (let i = 0; i < 420; i++) {
+    ctx.fillStyle = `rgba(107,84,58,${0.2 + Math.random() * 0.25})`;
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+  // a few larger bare-earth patches so the lawn is not uniformly green
+  for (let i = 0; i < 4; i++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const pr = size * (0.06 + Math.random() * 0.08);
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, pr);
+    grad.addColorStop(0, 'rgba(120,100,66,0.4)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+  }
+  // worn tan streaks where feet/tyres cross the grass
+  for (let i = 0; i < 6; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    ctx.strokeStyle = `rgba(150,130,90,${0.10 + Math.random() * 0.08})`;
+    ctx.lineWidth = 3 + Math.random() * 5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * size * 0.5, y + (Math.random() - 0.5) * size * 0.3);
+    ctx.stroke();
+  }
+}
+
+// One grass tuft: tapered blades fanning out, in four greens.
+function tuftTexture() {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  const greens = ['#3f5f24', '#557a30', '#6d9240', '#8aa84e'];
+  for (let i = 0; i < 15; i++) {
+    const bx = 8 + i * 7 + (Math.random() - 0.5) * 5;
+    const tipX = bx + (Math.random() - 0.5) * 44;
+    const tipY = 8 + Math.random() * 42;
+    const half = 2.5 + Math.random() * 2;
+    ctx.fillStyle = greens[i % greens.length];
+    ctx.beginPath();
+    ctx.moveTo(bx - half, size);
+    ctx.lineTo(bx + half, size);
+    ctx.lineTo(tipX, tipY);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Deterministic RNG (mulberry32) so tuft placement is identical every
+// load — the staged screenshots must be reproducible.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function hazardDraw(ctx, size) {
@@ -303,6 +405,177 @@ const SITE_PADS = [
   [5, 0.06, 5, 19, 0.03, -9],
 ];
 
+// Grassy ground patches (thin overlays on the asphalt, NOT colliders):
+// [w, d, x, z, tint]. Asphalt stays under the container pads, the site
+// pads and the main lanes (the worn paths bots walk); grass fills the yard
+// between containers, the mid-lane flanks, the spawn yards either side of
+// the divider gaps, the site approaches, and a strip inside the perimeter.
+const GRASS_PATCHES = [
+  // mid-lane flanks (central lane x -2.5..2.5 stays asphalt = worn path)
+  [4, 12, -4.5, 0, 0],
+  [4, 12, 4.5, 0, 1],
+  // yard between the containers
+  [5, 5, -13.5, 1, 1],
+  [5, 5, 13.5, -1, 2],
+  // Kestrel spawn yard, split so the three divider gaps stay asphalt
+  [5.5, 3, -4.25, 12.5, 0],
+  [5.5, 3, 4.25, 12.5, 2],
+  // spawn foreground: lawn right in front of the Kestrel line (the
+  // start-shot camera stands on it, so the frame opens on grass)
+  [16, 2, 0, 15.2, 1],
+  // Vulture yard (mirrored)
+  [5.5, 3, -4.25, -12.5, 1],
+  [5.5, 3, 4.25, -12.5, 0],
+  // site approaches, just outside the site walls
+  [3.5, 8, -12, -9, 0],
+  [3.5, 8, 12, -9, 1],
+  // northern strip inside each site, behind the pad
+  [7, 1.8, -19, -13, 2],
+  [7, 1.8, 19, -13, 0],
+  // southern strip inside each site, in front of the pad (end-shot
+  // foreground: the camera stands just south-east of Site A)
+  [4, 2.5, -17, -5, 0],
+  [4, 2.5, 17, -5, 1],
+  // inner perimeter strips (inside the boundary walls)
+  [1.6, 30, -23, 0, 1],
+  [1.6, 30, 23, 0, 2],
+  [44, 1.6, 0, -17.2, 0],
+  [44, 1.6, 0, 17.2, 1],
+];
+
+// Grass tint variants (multiplied over the same patchy texture).
+const GRASS_TINTS = [0xffffff, 0xe8f0d0, 0xd8e8b8];
+
+// Grass patches + instanced tufts + the lawn beyond the walls.
+// Static only: patches are thin non-colliding overlays, tufts are two
+// static InstancedMeshes (crossed planes) with per-instance tint. No
+// per-frame work, no allocation in the sim loop.
+function buildGrass(group, shootables) {
+  // One patchy texture per tint; each patch repeats it to its own size
+  // (repeat ~1 tile per 3 m) so the grain stays consistent.
+  const mats = GRASS_TINTS.map((tint) => new THREE.MeshStandardMaterial({
+    map: makeCanvasTexture(grassDraw, 256, 1, 1),
+    color: tint,
+    roughness: 1.0,
+    metalness: 0.0,
+  }));
+  for (const [w, d, x, z, tint] of GRASS_PATCHES) {
+    const mat = mats[tint].clone();
+    mat.map = mat.map.clone();
+    mat.map.repeat.set(Math.max(1, Math.round(w / 2.5)), Math.max(1, Math.round(d / 2.5)));
+    mat.map.needsUpdate = true;
+    const patch = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, d), mat);
+    patch.position.set(x, 0.015, z);
+    patch.receiveShadow = true;
+    group.add(patch);
+    shootables.push(patch); // bullet impacts on grass read like the floor
+  }
+
+  // Lawn beyond the walls: a wide grass plane under the whole map so the
+  // view over the fence line is green, not void (fog hazes it out).
+  const outerMat = new THREE.MeshStandardMaterial({
+    map: makeCanvasTexture(grassDraw, 256, 24, 24),
+    roughness: 1.0,
+    metalness: 0.0,
+  });
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(180, 180), outerMat);
+  outer.rotation.x = -Math.PI / 2;
+  outer.position.y = -0.08;
+  group.add(outer);
+
+  // ---- instanced grass tufts (crossed planes, ~400, static) ----
+  const rng = mulberry32(1337);
+  const tuftGeo = new THREE.PlaneGeometry(0.55, 0.5);
+  tuftGeo.translate(0, 0.25, 0);
+  const tuftMat = new THREE.MeshLambertMaterial({
+    map: tuftTexture(),
+    alphaTest: 0.4,
+    side: THREE.DoubleSide,
+  });
+  // Exclusions: solid footprints (inflated), site pads, spawn points,
+  // and the bot walking corridors (nav nodes + edges).
+  const solids = [];
+  for (const [w, h, d, x, y, z, matKey] of BOXES) {
+    if (matKey === 'floor') continue;
+    solids.push({ minX: x - w / 2 - 0.4, maxX: x + w / 2 + 0.4, minZ: z - d / 2 - 0.4, maxZ: z + d / 2 + 0.4 });
+  }
+  for (const [w, h, d, x, y, z] of SITE_PADS) {
+    solids.push({ minX: x - w / 2 - 0.5, maxX: x + w / 2 + 0.5, minZ: z - d / 2 - 0.5, maxZ: z + d / 2 + 0.5 });
+  }
+  const spawns = [
+    [-6, 15], [-3, 16], [0, 15], [3, 16], [6, 15],
+    [-6, -15], [-3, -16], [0, -15], [3, -16], [6, -15],
+  ];
+  const byId = new Map(NODES.map((n) => [n.id, n]));
+  const segDist = (px, pz, ax, az, bx, bz) => {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len2 = dx * dx + dz * dz;
+    let t = len2 === 0 ? 0 : ((px - ax) * dx + (pz - az) * dz) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
+  };
+  const blocked = (x, z) => {
+    for (const s of solids) {
+      if (x >= s.minX && x <= s.maxX && z >= s.minZ && z <= s.maxZ) return true;
+    }
+    for (const [sx, sz] of spawns) {
+      if (Math.hypot(x - sx, z - sz) < 1.0) return true;
+    }
+    for (const [a, b] of EDGE_PAIRS) {
+      const na = byId.get(a);
+      const nb = byId.get(b);
+      if (segDist(x, z, na.x, na.z, nb.x, nb.z) < 0.7) return true;
+    }
+    return false;
+  };
+  const spots = [];
+  for (const [w, d, x, z] of GRASS_PATCHES) {
+    const tries = Math.round(w * d * 1.6);
+    for (let i = 0; i < tries; i += 1) {
+      const px = x - w / 2 + 0.3 + rng() * (w - 0.6);
+      const pz = z - d / 2 + 0.3 + rng() * (d - 0.6);
+      if (!blocked(px, pz)) spots.push([px, pz]);
+    }
+  }
+  const count = spots.length;
+  const meshA = new THREE.InstancedMesh(tuftGeo, tuftMat, count);
+  const meshB = new THREE.InstancedMesh(tuftGeo, tuftMat, count);
+  meshA.frustumCulled = false;
+  meshB.frustumCulled = false;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const v = new THREE.Vector3();
+  const s = new THREE.Vector3();
+  const col = new THREE.Color();
+  for (let i = 0; i < count; i += 1) {
+    const [px, pz] = spots[i];
+    const rot = rng() * Math.PI;
+    const sc = 0.7 + rng() * 0.6;
+    e.set(0, rot, 0);
+    q.setFromEuler(e);
+    v.set(px, 0, pz);
+    s.set(sc, sc * (0.85 + rng() * 0.3), sc);
+    m.compose(v, q, s);
+    meshA.setMatrixAt(i, m);
+    e.set(0, rot + Math.PI / 2, 0);
+    q.setFromEuler(e);
+    m.compose(v, q, s);
+    meshB.setMatrixAt(i, m);
+    col.setHSL(0.26 + rng() * 0.04, 0.45, 0.42 + rng() * 0.18);
+    meshA.setColorAt(i, col);
+    meshB.setColorAt(i, col);
+  }
+  meshA.instanceMatrix.needsUpdate = true;
+  meshB.instanceMatrix.needsUpdate = true;
+  if (meshA.instanceColor) meshA.instanceColor.needsUpdate = true;
+  if (meshB.instanceColor) meshB.instanceColor.needsUpdate = true;
+  group.add(meshA);
+  group.add(meshB);
+  return count;
+}
+
 // ------------------------------------------------------------------- build
 export function createWorld(scene) {
   // Warm hazy sky as the backdrop (the dome sits beyond the fog range and
@@ -374,9 +647,15 @@ export function createWorld(scene) {
     shootables.push(pad);
   }
 
+  // Grassy yard: patchy lawn overlays, instanced tufts, lawn beyond the
+  // walls. Patches are visual only (not colliders); tufts are kept clear
+  // of bot corridors, spawn points and solid footprints.
+  const grassTufts = buildGrass(group, shootables);
+
   // ------------------------------------------------------------ lighting
   // Late-afternoon sun: bright warm key with shadows, cool sky bounce.
-  const hemi = new THREE.HemisphereLight(0xbfd6e8, 0x8a7a5f, 1.35);
+  // Hemisphere ground bounce is grass-green now that the yard is a lawn.
+  const hemi = new THREE.HemisphereLight(0xbfd6e8, 0x6a7a4f, 1.35);
   scene.add(hemi);
 
   const key = new THREE.DirectionalLight(0xffd9a0, 2.6);
@@ -425,5 +704,6 @@ export function createWorld(scene) {
     },
     group,
     bounds: { minX: -24, maxX: 24, minZ: -18, maxZ: 18 },
+    grassTufts,
   };
 }

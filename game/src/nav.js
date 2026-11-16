@@ -73,8 +73,9 @@ export const NODES = [
   { id: 'be', x: 15.5, z: -8.5 },
 ];
 
-// Undirected edges, as [fromId, toId] pairs.
-const EDGE_PAIRS = [
+// Undirected edges, as [fromId, toId] pairs. Exported for world.js so
+// grass tufts can be kept clear of the bot walking corridors.
+export const EDGE_PAIRS = [
   // spawns <-> mid
   ['k0', 'sm'], ['k1', 'sm'], ['k2', 'sm'], ['k3', 'sm'], ['k4', 'sm'],
   ['sm', 'ms'],
